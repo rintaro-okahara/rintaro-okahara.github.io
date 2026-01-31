@@ -32,7 +32,7 @@ export function Nav() {
       >
         <Menu className="h-5 w-5" aria-hidden="true" />
       </button>
-      <ul className="hidden text-sm md:block md:space-y-2">
+      <ul className="hidden text-lg md:block md:space-y-4">
         <li><Link href="/about">About</Link></li>
         <li><Link href="/works">Works</Link></li>
         <li><Link href="/research">Research</Link></li>
