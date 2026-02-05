@@ -1,11 +1,15 @@
 import Link from "next/link";
 
+import StarfieldBg from "@/components/StarfieldBg";
 import { latestNews } from "@/content/news";
 
 export default function Top() {
+  const variant: "night" | "light" = "night";
+
   return (
-    <main className="">
-      <div className="flex min-h-[100dvh] items-center">
+    <main className="relative min-h-[100dvh] overflow-hidden">
+      <StarfieldBg variant={variant} />
+      <div className="relative z-10 flex min-h-[100dvh] items-center">
         <h2 className="w-full">
           <ul className="ml-[10%] w-[80%] max-w-[45rem] space-y-10 text-left text-4xl tracking-tight md:text-5xl">
             <li>
