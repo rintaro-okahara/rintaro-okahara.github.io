@@ -3,6 +3,10 @@
 import { useEffect, useRef } from "react";
 import { mountStarfield } from "@/lib/starfield-canvas";
 
+type Props = {
+  variant?: "night" | "day";
+};
+
 export default function StarfieldBg({ variant = "night" }: Props) {
   const ref = useRef<HTMLCanvasElement | null>(null);
 
