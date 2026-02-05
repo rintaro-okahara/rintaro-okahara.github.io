@@ -4,7 +4,7 @@ import StarfieldBg from "@/components/StarfieldBg";
 import { latestNews } from "@/content/news";
 
 export default function Top() {
-  const variant: "night" | "light" = "night";
+  const variant: "night" | "day" = "night";
 
   return (
     <main className="relative min-h-[100dvh] overflow-hidden">
