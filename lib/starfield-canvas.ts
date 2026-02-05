@@ -18,15 +18,16 @@ export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions
   const ctx = canvas.getContext("2d", { alpha: true });
   if (!ctx) return { destroy() {} };
 
-  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
 
   const o = {
     bgInner: "#1b2735",
     bgOuter: "#090a0f",
     layers: [
-      { count: 520, rMin: 0.5, rMax: 1.2, speed: 3.2,  alphaMin: 0.35, alphaMax: 0.9,  twinkle: 0.18 },
-      { count: 220, rMin: 1.0, rMax: 2.0, speed: 9.5, alphaMin: 0.35, alphaMax: 0.95, twinkle: 0.10 },
-      { count: 90,  rMin: 1.6, rMax: 3.0, speed: 18, alphaMin: 0.35, alphaMax: 1.0,  twinkle: 0.06 },
+      { count: 1400, rMin: 0.3, rMax: 0.8, speed: 2.2, alphaMin: 0.08, alphaMax: 0.25, twinkle: 0.12 },
+      { count: 700, rMin: 0.5, rMax: 1.2, speed: 3.2,  alphaMin: 0.25, alphaMax: 0.7,  twinkle: 0.18 },
+      { count: 260, rMin: 1.0, rMax: 2.0, speed: 9.5, alphaMin: 0.3, alphaMax: 0.85, twinkle: 0.10 },
+      { count: 110, rMin: 1.6, rMax: 3.0, speed: 18, alphaMin: 0.35, alphaMax: 0.95, twinkle: 0.06 },
     ],
     driftX: 0.8,
     pauseWhenHidden: true,
@@ -56,14 +57,13 @@ export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions
   }
 
   function resize() {
+    dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
     const rect = canvas.getBoundingClientRect();
     w = Math.max(1, Math.floor(rect.width));
     h = Math.max(1, Math.floor(rect.height));
 
     canvas.width = Math.floor(w * dpr);
     canvas.height = Math.floor(h * dpr);
-    canvas.style.width = `${w}px`;
-    canvas.style.height = `${h}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     layers = o.layers.map((L) => ({
@@ -107,8 +107,8 @@ export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions
     const angle = -25 * (Math.PI / 180);
     const bandWidth = Math.min(w, h) * 0.55;
     const coreWidth = bandWidth * 0.35;
-    const arcRadius = Math.max(w, h) * 0.9;
-    const arcSpan = 0.95; // radians
+    const arcRadius = Math.max(w, h) * 1.45;
+    const arcSpan = 1.6; // radians
     const arcCenterY = arcRadius * 0.95;
 
     g.save();
@@ -315,6 +315,7 @@ export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions
 
   const ro = new ResizeObserver(resize);
   ro.observe(canvas);
+  window.addEventListener("resize", resize);
 
   resize();
   raf = requestAnimationFrame(tick);
@@ -336,6 +337,7 @@ export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions
   return {
     destroy() {
       ro.disconnect();
+      window.removeEventListener("resize", resize);
       document.removeEventListener("visibilitychange", onVis);
       if (raf != null) cancelAnimationFrame(raf);
       raf = null;
