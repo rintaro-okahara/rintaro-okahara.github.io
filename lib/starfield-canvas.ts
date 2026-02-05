@@ -37,14 +37,27 @@ export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions
   let w = 0, h = 0;
   let raf: number | null = null;
   let running = true;
+  let resizeRaf: number | null = null;
 
   const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
   type Star = { x: number; y: number; r: number; a: number; phase: number };
-  type Layer = (typeof o.layers)[number] & { stars: Star[] };
+  type Layer = (typeof o.layers)[number] & { stars: Star[]; density: number };
 
   let layers: Layer[] = [];
   let bandCanvas: HTMLCanvasElement | null = null;
+  let bandParams:
+    | {
+        originX: number;
+        originY: number;
+        angle: number;
+        bandWidth: number;
+        coreWidth: number;
+        arcRadius: number;
+        arcSpan: number;
+        arcCenterY: number;
+      }
+    | null = null;
 
   function makeStar(L: (typeof o.layers)[number], randomY = false): Star {
     return {
@@ -56,7 +69,9 @@ export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions
     };
   }
 
-  function resize() {
+  function applyResize() {
+    const prevW = w || 1;
+    const prevH = h || 1;
     dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
     const rect = canvas.getBoundingClientRect();
     w = Math.max(1, Math.floor(rect.width));
@@ -66,12 +81,104 @@ export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions
     canvas.height = Math.floor(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    layers = o.layers.map((L) => ({
-      ...L,
-      stars: new Array(L.count).fill(0).map(() => makeStar(L, true)),
-    }));
+    if (layers.length === 0) {
+      layers = o.layers.map((L) => ({
+        ...L,
+        density: L.count / (w * h),
+        stars: new Array(L.count).fill(0).map(() => makeStar(L, true)),
+      }));
+    } else {
+      for (const L of layers) {
+        const desired = Math.max(1, Math.round(L.density * w * h));
 
-    bandCanvas = buildGalaxyBand();
+        // If shrinking, drop stars outside bounds first
+        if (L.stars.length > desired || w < prevW || h < prevH) {
+          L.stars = L.stars.filter((s) => s.x <= w && s.y <= h);
+          if (L.stars.length > desired) {
+            L.stars.length = desired;
+          }
+        }
+
+        // If expanding, add new stars in the newly revealed area
+        if (L.stars.length < desired) {
+          const need = desired - L.stars.length;
+          for (let i = 0; i < need; i++) {
+            let sx = rand(0, w);
+            let sy = rand(0, h);
+            if (w > prevW || h > prevH) {
+              let tries = 0;
+              while (tries < 12) {
+                const tx = rand(0, w);
+                const ty = rand(0, h);
+                const inNewX = tx > prevW;
+                const inNewY = ty > prevH;
+                if (inNewX || inNewY) {
+                  sx = tx;
+                  sy = ty;
+                  break;
+                }
+                tries++;
+              }
+            }
+            const s = makeStar(L, true);
+            s.x = sx;
+            s.y = sy;
+            L.stars.push(s);
+          }
+        }
+      }
+    }
+
+    if (!bandCanvas) {
+      bandCanvas = buildGalaxyBand();
+    } else if (w > bandCanvas.width || h > bandCanvas.height) {
+      const oldW = bandCanvas.width;
+      const oldH = bandCanvas.height;
+      const next = document.createElement("canvas");
+      next.width = w;
+      next.height = h;
+      const g = next.getContext("2d");
+      if (g) {
+        g.drawImage(bandCanvas, 0, 0);
+        if (bandParams) {
+          if (w > oldW) {
+            g.save();
+            g.beginPath();
+            g.rect(oldW, 0, w - oldW, h);
+            g.clip();
+            drawGalaxyBand(g, bandParams);
+            g.restore();
+          }
+          if (h > oldH) {
+            g.save();
+            g.beginPath();
+            g.rect(0, oldH, oldW, h - oldH);
+            g.clip();
+            drawGalaxyBand(g, bandParams);
+            g.restore();
+          }
+        }
+      }
+      bandCanvas = next;
+    }
+
+    // Draw a frame immediately to prevent a white flash after canvas resize
+    drawBackground();
+    if (bandCanvas) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = 0.9;
+      ctx.drawImage(bandCanvas, 0, 0);
+      ctx.restore();
+    }
+    drawStars(performance.now());
+  }
+  function resize() {
+    if (resizeRaf != null) return;
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = null;
+      applyResize();
+    });
   }
 
   function drawBackground() {
@@ -97,22 +204,30 @@ export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   };
 
-  function buildGalaxyBand() {
-    const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
-    const g = c.getContext("2d");
-    if (!g) return c;
-
+  function createBandParams(baseW: number, baseH: number) {
     const angle = -25 * (Math.PI / 180);
-    const bandWidth = Math.min(w, h) * 0.55;
+    const bandWidth = Math.min(baseW, baseH) * 0.55;
     const coreWidth = bandWidth * 0.35;
-    const arcRadius = Math.max(w, h) * 1.45;
+    const arcRadius = Math.max(baseW, baseH) * 1.45;
     const arcSpan = 1.6; // radians
     const arcCenterY = arcRadius * 0.95;
+    return {
+      originX: baseW * 0.5,
+      originY: baseH * 0.5,
+      angle,
+      bandWidth,
+      coreWidth,
+      arcRadius,
+      arcSpan,
+      arcCenterY,
+    };
+  }
+
+  function drawGalaxyBand(g: CanvasRenderingContext2D, p: NonNullable<typeof bandParams>) {
+    const { originX, originY, angle, bandWidth, coreWidth, arcRadius, arcSpan, arcCenterY } = p;
 
     g.save();
-    g.translate(w * 0.5, h * 0.5);
+    g.translate(originX, originY);
     g.rotate(angle);
 
     const drawArcRibbon = (
@@ -264,7 +379,33 @@ export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions
     }
 
     g.restore();
+  }
+
+  function buildGalaxyBand() {
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const g = c.getContext("2d");
+    if (!g) return c;
+    if (!bandParams) bandParams = createBandParams(w, h);
+    drawGalaxyBand(g, bandParams);
     return c;
+  }
+
+  function drawStars(t: number) {
+    for (const L of layers) {
+      for (const s of L.stars) {
+        const tw = L.twinkle
+          ? (Math.sin(t / 1000 + s.phase) * 0.5 + 0.5) * L.twinkle
+          : 0;
+
+        const a = Math.max(0, Math.min(1, s.a * (1 - L.twinkle + tw)));
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
 
   let tPrev = performance.now();
@@ -297,19 +438,10 @@ export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions
           s.phase = rand(0, Math.PI * 2);
         }
         if (s.x > w + 4) s.x = -4;
-
-        const tw = L.twinkle
-          ? (Math.sin(t / 1000 + s.phase) * 0.5 + 0.5) * L.twinkle
-          : 0;
-
-        const a = Math.max(0, Math.min(1, s.a * (1 - L.twinkle + tw)));
-        ctx.beginPath();
-        ctx.fillStyle = `rgba(255,255,255,${a})`;
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fill();
       }
     }
 
+    drawStars(t);
     raf = requestAnimationFrame(tick);
   }
 
@@ -317,7 +449,7 @@ export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions
   ro.observe(canvas);
   window.addEventListener("resize", resize);
 
-  resize();
+  applyResize();
   raf = requestAnimationFrame(tick);
 
   function onVis() {
