@@ -15,7 +15,7 @@ export type StarfieldOptions = {
 };
 
 export function mountStarfield(canvas: HTMLCanvasElement, opts: StarfieldOptions = {}) {
-  const ctx = canvas.getContext("2d", { alpha: true });
+  const ctx = canvas.getContext("2d", { alpha: true })!;
   if (!ctx) return { destroy() {} };
 
   let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
