@@ -2,13 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLanguage } from "../LanguageProvider";
-
-type Section = {
-  id: string;
-  label: string;
-  title: string;
-  body: string[];
-};
+import type { Section } from "./types";
 
 export default function AboutPage() {
   const { lang } = useLanguage();
